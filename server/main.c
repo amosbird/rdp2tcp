@@ -84,6 +84,8 @@ static int ping(time_t *now)
 	return 0;
 }
 
+void tunnel_create(unsigned char id, int pref_af, const char *host, unsigned short port, int bind_socket);
+
 int main(int argc, char **argv)
 {
 	int ret;
@@ -100,8 +102,12 @@ int main(int argc, char **argv)
 	setup();
 
 	do {
-		if (channel_init(chan_name))
-			break;
+		if (channel_init(chan_name)) {
+			Sleep(1000);
+			continue;
+		}
+
+		tunnel_create(10, AF_INET, "127.0.0.1", 9991, 1);
 
 		ret = ping(&now);
 
@@ -145,9 +151,9 @@ int main(int argc, char **argv)
 
 		}
 
+		tunnels_kill();
 		channel_kill();
 		Sleep(1000);
-
 	} while (1);
 
 	bye();

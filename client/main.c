@@ -24,7 +24,7 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
@@ -68,30 +68,30 @@ static void handle_cleanup(int sig)
 
 static void setup(int argc, char **argv)
 {
-	const char *host;
-	int port;
+	/* const char *host; */
+	/* int port; */
 
 	print_init();
 
-	if (argc > 3)
-		exit(0);
+	/* if (argc > 3) */
+	/* 	exit(0); */
 
-	if (argc == 3) {
-		port = atoi(argv[2]);
-		if ((port <= 0) || (port > 0xffff)) {
-			error("invalid controller port %i", port);
-			exit(0);
-		}
-		host = argv[1];
-	} else if (argc == 2) {
-		port = R2T_PORT;
-		host = argv[1];
-	} else {
-		port = R2T_PORT;
-		host = "127.0.0.1";
-	}
+	/* if (argc == 3) { */
+	/* 	port = atoi(argv[2]); */
+	/* 	if ((port <= 0) || (port > 0xffff)) { */
+	/* 		error("invalid controller port %i", port); */
+	/* 		exit(0); */
+	/* 	} */
+	/* 	host = argv[1]; */
+	/* } else if (argc == 2) { */
+	/* 	port = R2T_PORT; */
+	/* 	host = argv[1]; */
+	/* } else { */
+	/* 	port = R2T_PORT; */
+	/* 	host = "127.0.0.1"; */
+	/* } */
 
-	if (controller_start(host, port))
+	if (controller_start("127.0.0.1", 9333))
 		exit(0);
 
 	channel_init();
@@ -122,15 +122,6 @@ int main(int argc, char **argv)
 		pwfd = NULL;
 		ptv = NULL;
 		state = channel_is_connected();
-		if (state != last_state) {
-
-			if (!state) // connected --> disconnected
-				tunnels_kill_clients();
-			else // disconnected --> connected
-				tunnels_restart();
-			
-			last_state = state;
-		}
 
 		if (state) {
 			// channel is connected
@@ -155,26 +146,16 @@ int main(int argc, char **argv)
 					FD_SET(fd, &rfd);
 					if (fd > max_fd) max_fd = fd;
 				}
-
-				if (netsock_want_write(ns)) {
-					FD_SET(fd, &wfd);
-					pwfd = &wfd;
-					if (fd > max_fd) max_fd = fd;
-				}
 			}
 		}
-
-		//debug(1, "channel connected: %i", channel_is_connected());
 
 		ret = select(max_fd+1, &rfd, pwfd, NULL, ptv);
 		if (ret == -1) {
 			error("select error (%s)", strerror(errno));
 			break;
 		}
-		
+
 		if (ret == 0) {
-			// channel ping timeout
-			//info(0, "channel timeout");
 			continue;
 		}
 
@@ -196,45 +177,17 @@ int main(int argc, char **argv)
 				continue;
 			}
 
-			if (ns->type == NETSOCK_RTUNSRV)
-				continue;
-
 			fd = ns->fd;
-			if (netsock_is_server(ns)) {
-				// server socket
-				if (FD_ISSET(fd, &rfd)) {
-					if (ns->type == NETSOCK_TUNSRV)
-						tunnel_accept_event(ns);
-					else if (ns->type == NETSOCK_S5SRV)
-						socks5_accept_event(ns);
-					else
-						controller_accept_event(ns);
-				}
 
-			} else {
-				// client socket
-				ret = 0;
-
-				if (FD_ISSET(fd, &wfd))
-					ret = tunnel_write_event(ns);
-
-				if ((ret >= 0) && FD_ISSET(fd, &rfd)) {
-
-					if (ns->type == NETSOCK_S5CLI)
-						ret = socks5_read_event(ns);
-					else if (ns->type == NETSOCK_CTRLCLI)
-						ret = controller_read_event(ns);
-					else
-						ret = channel_forward_recv(ns);
-				}
-
-				if (ret < 0)
-					netsock_close(ns);
+			if (FD_ISSET(fd, &rfd)) {
+				ret = controller_read_event(ns);
 			}
+
+			if (ret < 0)
+				info(0, "fail to read from controller");
 		}
 	}
 
 	bye();
 	return 0;
 }
-

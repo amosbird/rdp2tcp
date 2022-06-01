@@ -127,6 +127,7 @@ unsigned char channel_request_tunnel(unsigned char, const char *, unsigned short
 int channel_forward_recv(netsock_t *);
 int channel_forward_iobuf(iobuf_t *, unsigned char);
 void channel_close_tunnel(unsigned char);
+int channel_exec(const char *cmd);
 
 // controller.c
 int  controller_start(const char *, unsigned short);
@@ -155,7 +156,6 @@ void tunnels_restart(void);
 int socks5_bind(netsock_t *, const char *, unsigned short);
 void socks5_connect_event(netsock_t *, int, const void *, unsigned short);
 void socks5_accept_event(netsock_t *);
-int  socks5_read_event(netsock_t *);
 
 // main.c
 void bye(void);

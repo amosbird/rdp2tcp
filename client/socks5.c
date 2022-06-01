@@ -243,22 +243,6 @@ static int socks5_setup(netsock_t *cli)
 }
 
 /**
- * handle SOCKS5 client network read-event
- * @param[in] cli client socket
- * @return 0 on success
- */
-int socks5_read_event(netsock_t *cli)
-{
-	assert(valid_netsock(cli) && (cli->type == NETSOCK_S5CLI));
-	trace_socks("state=0x%02x", cli->state);
-
-	if (cli->state != NETSTATE_CONNECTED)
-		return socks5_setup(cli);
-
-	return channel_forward_recv(cli);
-}
-
-/**
  * handle SOCKS5 server network accept-event
  * @param[in] srv server socket
  * @return 0 on success

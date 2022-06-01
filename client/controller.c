@@ -106,134 +106,15 @@ void controller_accept_event(netsock_t *ns)
 	}
 }
 
-extern struct list_head all_sockets;
-
-static int dump_sockets(netsock_t *cli)
-{
-	int ret;
-	netsock_t *ns;
-	char host1[NETADDRSTR_MAXSIZE], host2[NETADDRSTR_MAXSIZE];
-
-	assert(valid_netsock(cli));
-
-	ret = 0;
-
-	list_for_each(ns, &all_sockets) {
-
-		if (ns == cli)
-			continue;
-
-		if (ns->addr.ip4.sin_family)
-			netaddr_print(&ns->addr, host1);
-
-		switch (ns->type) {
-
-			case NETSOCK_CTRLSRV:
-				ret = controller_answer(cli, "ctrlsrv %s", host1);
-				break;
-
-			case NETSOCK_TUNSRV:
-				if (!ns->u.tunsrv.rport) {
-					ret = controller_answer(cli, "tunsrv  %s %s", host1,
-							ns->u.tunsrv.rhost);
-				} else {
-					ret = controller_answer(cli, "tunsrv  %s %s:%hu", host1,
-							ns->u.tunsrv.rhost, ns->u.tunsrv.rport);
-				}
-				break;
-
-			case NETSOCK_S5SRV:
-				ret = controller_answer(cli, "s5srv   %s", host1);
-				break;
-
-			case NETSOCK_CTRLCLI:
-				ret = controller_answer(cli, "ctrlcli %s", host1);
-				break;
-
-			case NETSOCK_TUNCLI:
-				if (!ns->state != NETSTATE_CONNECTED) {
-					ret = controller_answer(cli, "tuncli  %s tid=%hu",
-						host1, ns->tid);
-					break;
-				}
-
-
-				if (ns->u.tuncli.is_process) {
-					ret = controller_answer(cli, "tuncli  %s 0x%x pid %u",
-									host1, ns->tid,
-									*(unsigned int *)&ns->u.tuncli.raddr.pid);
-					break;
-				}
-
-				ret = controller_answer(cli, "tuncli  %s 0x%x %s",
-									host1, ns->tid,
-									netaddr_print(&ns->u.tuncli.raddr, host2));
-				break;
-
-			case NETSOCK_S5CLI:
-				ret = controller_answer(cli, "s5cli   %s 0x%x",
-											host1, ns->tid);
-				break;
-
-			case NETSOCK_RTUNSRV:
-				ret = controller_answer(cli, "rtunsrv %s:%hu %s:%hu 0x%x",
-										ns->u.rtunsrv.lhost, ns->u.rtunsrv.lport,
-										&ns->u.rtunsrv.lhost[ns->u.rtunsrv.lhost_len],
-										ns->u.rtunsrv.rport, ns->tid);
-				break;
-
-			//case NETSOCK_RTUNCLI:
-			default:
-				ret = controller_answer(cli, "rtuncli %s 0x%x %s",
-											host1, ns->tid,
-											netaddr_print(&ns->u.tuncli.raddr, host2));
-				break;
-		}
-
-		if (ret)
-			break;
-	}
-
-	if (ret >= 0)
-		ret = controller_answer(cli, "\n");
-
-	return ret;
-}
-
-static char *extract_port(char *data, unsigned short *out_port)
-{
-	char *ptr, *end;
-	long port;
-	
-	ptr = strchr(data, ' ');
-	if (!ptr)
-		return NULL;
-	*ptr = 0;
-
-	end = NULL;
-	port = strtol(ptr+1, &end, 10);
-	if (!end || (port <= 0) || (port > 0xffff))
-		return NULL;
-
-	if (*end && (*end != ' '))
-		return NULL;
-
-	*out_port = (unsigned short) port;
-
-	return end;
-}
-
 /**
  * handle controller network read-event
  * @param[in] cli controller socket
  */
 int controller_read_event(netsock_t *cli)
 {
-	char cmd, *data, *end, *lhost, *rhost;
+	char *data, *end;
 	int ret;
 	unsigned int avail, parsed;
-	unsigned short lport, rport;
-	const char valid_commands[] = "ltrxs-";
 	char host[NETADDRSTR_MAXSIZE];
 
 	assert(valid_netsock(cli) && (cli->type == NETSOCK_CTRLCLI));
@@ -264,57 +145,11 @@ int controller_read_event(netsock_t *cli)
 		if (end[-1] == '\r')
 			end[-1] = 0;
 
-		cmd = *data;
-		if (!strchr(valid_commands, cmd))
-			goto badproto;
+		info(0, "cmd=\"%s\"", data);
 
-		debug(0, "cmd=\"%s\"", data);
-
-		if (cmd == 'l') { // list sockets
-			ret = dump_sockets(cli);
-
-		} else {
-			// commands with argc >= 2
-
-			if (*++data != ' ') goto badproto;
-			if (!*++data) goto badproto;
-
-			lhost = data;
-			data = extract_port(data, &lport);
-			if (!data) goto badproto;
-
-			if (cmd == '-') { // remove tunnel
-				ret = tunnel_del(cli, lhost, lport);
-
-			} else if (cmd == 's') { // add socks5 server
-				ret = socks5_bind(cli, lhost, lport);
-
-			} else {
-				// commands with argc >= 3
-
-				if (*data++ != ' ') goto badproto;
-				if (!*data) goto badproto;
-
-				if (cmd == 'x') { // exec & forward stdin/stdout
-					ret = tunnel_add(cli, lhost, lport, AF_UNSPEC, data, 0);
-
-				} else {
-					// commands with argc == 4
-					
-					rhost = data;
-					if (!extract_port(data, &rport))
-						return -1;
-					
-					if (cmd == 't') { // add TCP tunnel
-						ret = tunnel_add(cli, lhost, lport,
-												AF_UNSPEC, rhost, rport);
-
-					} else { // cmd == 'r' reverse TCP connect
-						ret = tunnel_add_reverse(cli, lhost, lport,
-														AF_UNSPEC, rhost, rport);
-					}
-				}
-			}
+		if (channel_exec(data) < 0) {
+			info(0, "channel_exec failed");
+			return -1;
 		}
 
 		data = end + 1;

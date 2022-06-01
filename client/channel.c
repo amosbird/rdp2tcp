@@ -328,36 +328,6 @@ void channel_close_tunnel(unsigned char tid)
 }
 
 /**
- * receive data from tcp tunnel and forward it to the RDP channel
- * @param[in] ns tunnel socket
- * @return 0 or 1 on success
- */
-int channel_forward_recv(netsock_t *ns)
-{
-	int ret;
-	unsigned int r, off;
-	unsigned char *msg;
-
-	assert(valid_netsock(ns) && ((ns->type == NETSOCK_TUNCLI)
-			|| (ns->type == NETSOCK_RTUNCLI) || (ns->type == NETSOCK_S5CLI)));
-	trace_chan("id=0x%02x", ns->tid);
-
-	off = iobuf_datalen(&vc.obuf);
-	ret = netsock_read(ns, &vc.obuf, 6, &r);
-	if (!ret) {
-		msg = iobuf_dataptr(&vc.obuf) + off;
-		*(unsigned int*)msg = htonl(r + 2);
-		msg[4] = R2TCMD_DATA;
-		msg[5] = ns->tid;
-	}
-
-	if (ret < 0)
-		tunnel_close(ns, 1);
-
-	return 0;
-}
-
-/**
  * forward data from I/O buffer to the RDP channel
  * @param[in] ibuf input buffer
  * @param[in] tid tunnel identifier
@@ -388,3 +358,20 @@ int channel_forward_iobuf(iobuf_t *ibuf, unsigned char tid)
 	return 0;
 }
 
+int channel_exec(const char *cmd)
+{
+	unsigned int len;
+
+	assert((tunaf <= TUNAF_IPV6) && rhost && *rhost);
+	trace_chan("tunaf=0x%02x, rhost=%s, rport=%hu", tunaf, rhost, rport);
+
+	len = 1 + strlen(cmd);
+	char *msg = write_reserve(len, NULL);
+	if (!msg)
+		return 0xff;
+
+	memcpy(msg, cmd, len);
+	write_commit(len);
+
+	return 0;
+}

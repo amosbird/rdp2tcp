@@ -149,7 +149,7 @@ static int netres(
 
 	memset(&hints, 0, sizeof(hints));
 	hints.ai_family   = pref_af;
-	hints.ai_socktype = SOCK_STREAM;
+	hints.ai_socktype = SOCK_DGRAM;
 	snprintf(service, sizeof(service)-1, "%hu", port);
 
 	res = NULL;
@@ -202,19 +202,19 @@ static int netres(
 
 			if (!bind(fd, ptr->ai_addr, ptr->ai_addrlen)) {
 
-				if (!listen(fd, 5)) {
+				/* if (!listen(fd, 5)) { */
 #ifdef _WIN32
-					if (WSAEventSelect(fd, evt, FD_ACCEPT)) {
+					if (WSAEventSelect(fd, evt, FD_READ)) {
 						*err = nethelper_error;
 						ret = NETERR_SOCKET;
 						break;
 					}
 #endif
 					ret = 0;
-				} else {
-					*err = nethelper_error;
-					ret = NETERR_LISTEN;
-				}
+				/* } else { */
+				/* 	*err = nethelper_error; */
+				/* 	ret = NETERR_LISTEN; */
+				/* } */
 				break;
 			}
 			ret = NETERR_BIND;

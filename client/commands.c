@@ -151,16 +151,19 @@ static int cmd_close(const r2tmsg_t *msg, unsigned int len)
 
 static int cmd_data(const r2tmsg_t *msg, unsigned int len)
 {
-	netsock_t *clitun;
-
 	assert(msg && (len >= 3));
-	trace_chan("len=%u", len);
 
-	clitun = check_tunnel_id(msg);
-	if (!clitun)
-		return 0;
+	int pid = fork();
+	if (0 == pid) {
+		char * argv[3];
+		((char *)msg)[len-1] = '\0';
+		argv[0] = "/home/amos/scripts/luakit";
+		argv[1] = ((char *)msg)+2;
+		argv[2] = NULL;
+		execv(argv[0], argv);
+	}
 
-	return tunnel_write(clitun, ((const char *)msg)+2, len-2);
+	return 0;
 }
 
 static int cmd_ping(const r2tmsg_t *msg, unsigned int len)
